@@ -81,26 +81,9 @@ rv_subset$MA_OtC66 <- stats::lag(rv_subset$MA_OtC66, 1)
 rv_subset$MA_OtC132 <- stats::lag(rv_subset$MA_OtC132, 1)
 rv_subset$MA_OtC264 <- stats::lag(rv_subset$MA_OtC264, 1)
 
-                          ############################
-###########################
-# Lagged Moving Averages Plots (1 Day Time series)
-plot(rv_subset$MA_RV1,
-     col = "#646FD4",
-     main = "Lagged Moving Average of Realized Volatility (1 Day)",
-     xlab = "Date", ylab = "RV",
-     lwd = 1)
-plot(rv_subset$MA_Rets1, 
-     col = "#646FD4", 
-     main = "Lagged Moving Average of Daily returns (1 Day)",
-     xlab = "Date", ylab = "Daily returns",
-     lwd = 1)
-plot(rv_subset$MA_OtC1, 
-     col = "#646FD4", 
-     main = "Lagged Moving Average of Intraday Returns (1 Day)",
-     xlab = "Date", ylab = "Intraday Returns",
-     lwd = 1)
                           #############################
 ###########################
+
 # Lagged Moving Averages Plots Realized Volatility
 plot(rv_subset$MA_RV66, 
      col = "#646FD4", 
@@ -129,17 +112,27 @@ plot(rv_subset$MA_OtC66,
 lines(rv_subset$MA_OtC132, col = "#FF6FB5", lwd = 2)
 lines(rv_subset$MA_OtC264, col = "#36AE7C", lwd = 2)
 
-
+                          #############################
+###########################
 
 #Additional indicators using (TTR) Library
 require(TTR)
+# We tried several indicators in order to see if Volatility and Returns could give us more information on index overall situation.
 
-# Relative Strength Index
-rsi <- RSI(rv_data$close_price) # Draw un petit plot sympa avec le RSI ???
-plot(rsi)
-print(rsi)
+# Relative Strength Index --->
+# The relative strength index (RSI) is a momentum indicator used in technical analysis that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset.
+rsi <- RSI(rv_data$close_price)
+# -> plot(rsi, type = "s") #Ploting the RSI
+# With the RSI, we can see that the index is frequently underbought (under 20 RSI), and has very high peaks above 80 which could be explained by speculation and uncertainty within the market.  
 
-# MACD
-macd  <- MACD(rv_data$close_price, 12, 26, 9, maType="EMA" ) # Draw un petit plot sympa avec MACD ??? Variable rv_data$close_price à confirmer
+# Bollinger Bands --->
+# Bollinger Bands are a way to compare a security's volatility and price levels over a period of time. 
+BB <- BBands(rv_data$close_price, n = 22, sd = 2)
+df <- data.frame(BB)
 
-#Mosaique résumé des graphs à faire
+#plot(df$mavg, type = "s",lwd = 1)
+#lines(df$dn, col = "#FF6FB5", lwd = 1) 
+#lines(df$up, col = "#36AE7C", lwd = 1)
+
+                          #############################
+###########################
