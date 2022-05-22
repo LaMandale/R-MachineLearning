@@ -121,7 +121,7 @@ require(TTR)
 
 # Relative Strength Index --->
 # The relative strength index (RSI) is a momentum indicator used in technical analysis that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset.
-rsi <- RSI(rv_subset$Rets)
+rsi <- RSI(rv_subset$close_price)
 # -> plot(rsi, type = "s") #Ploting the RSI
 # With the RSI, we can see that the index is frequently underbought (under 20 RSI), and has very high peaks above 80 which could be explained by speculation and uncertainty within the market.  
 
@@ -138,3 +138,107 @@ lines(df$up, col = "#36AE7C", lwd = 1)
 
                           #############################
 ###########################
+
+# Splitting the data into training and testing sets
+train_data <- rv_subset["/2019", ]
+test_data <-  rv_subset["2020/", ]
+
+# Cleaning training data
+train_data <- na.omit(train_data)
+
+
+#######################Developing our linear ML models#########################
+
+#Let's start using the basic HAR model
+
+HAR_RV <- lm(RV ~ MA_RV1 + MA_RV5 + MA_RV22,
+             data = train_data)
+summary(HAR_RV)
+
+#Let's use an enhanced HAR model with our new variables
+
+EN_HAR_RV <- lm(RV ~ MA_RV1 + MA_RV5 + MA_RV22 + MA_RV66 + MA_RV132 + MA_Rets1 + MA_Rets5 + MA_Rets22 + MA_OtC1 + MA_OtC5 + MA_OtC22,
+                data = train_data)
+summary(EN_HAR_RV)
+
+#Predicting RV in the training sample with simple HAR model
+train_data$pred_HAR_RV <- as.numeric(predict(HAR_RV))
+
+#Predicting RV in the training sample with enhanced HAR model we created 
+train_data$pred_EN_HAR_RV <- as.numeric(predict(EN_HAR_RV))
+
+
+
+############### RIDGE REGRESSION ##############
+
+#Let's start using "glmnet" library to go a little more in depth with our regression
+# Side-note : might be useful to update native package 'Rcpp' for "glmnet" to work properly
+library(glmnet)
+
+#Let's find ridge penalty
+EN_HAR_RV_RIDGE <- glmnet(x=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')]),y = train_data$RV,alpha=0)
+summary(EN_HAR_RV_RIDGE)
+
+#We'll now run k-fold cross validation in order to find an optimal value for Lambda (penalty in ridge regression)
+cv_EN_HAR_RV_RIDGE <- cv.glmnet(x=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')]),y = train_data$RV,alpha=0)
+optimal_penalty <- cv_EN_HAR_RV_RIDGE$lambda.min
+
+#let's visualize the mean squared error given lambda
+plot(cv_EN_HAR_RV_RIDGE)
+
+#now let's develop our optimal lasso regression model
+EN_HAR_RV_RIDGE <- glmnet(x=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')]),y = train_data$RV,alpha=0,lambda=optimal_penalty)
+coef(EN_HAR_RV_RIDGE)
+
+#Let's store our result in our train data table
+train_data$pred_EN_HAR_RV_RIDGE <- as.numeric(predict(EN_HAR_RV_RIDGE, s = optimal_penalty, newx=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')])))
+
+
+
+#Plotting our predictions and actual values in the mean time for year 2019
+plot(train_data["2019", 
+                c("RV", "pred_HAR_RV","pred_EN_HAR_RV","pred_EN_HAR_RV_RIDGE")], 
+     col=c("black", "red","blue","cyan"),
+     lwd = c(1,1), 
+     main = "Actual vs predicted RVs", 
+     legend.loc = "topleft")
+
+#We could also do a lasso regression for optional variable reduction
+
+#######################Developing our non linear ML models#########################
+
+#Let's start with bagging/random forest
+library(rpart)
+library(caret)
+library(randomForest)
+library(ROCR)
+library(gbm)
+
+# to use the randomForest function, let's set the right data format
+#we develop a model with all our previously used predictors in enhanced HAR model
+fm.class <- as.formula( train_data$MA_RV1 + train_data$MA_RV5 + train_data$MA_RV22 + train_data$MA_RV66 + train_data$MA_RV132 + train_data$MA_Rets1 + train_data$MA_Rets5 + train_data$MA_Rets22 + train_data$MA_OtC1 + train_data$MA_OtC5 + train_data$MA_OtC22)
+
+xtrain_rf <- model.matrix(fm.class, data = train_data)
+ytrain_rf <- train_data$RV
+xtest_rf <- model.matrix(fm.class, data = test_data)
+ytest_rf <- test_data$RV
+
+
+
+
+
+
+#Calculating and generating functions to get Mean Squared Error as well as R Squared
+
+# create functions to calculate R2 and RMSE
+MSE = function(y_actual, y_predict){
+  sqrt(mean((y_actual-y_predict)^2))
+}
+
+# recall that R2 is given by 1 - SSR/SST
+RSQUARE = function(y_actual,y_predict){
+  1 - sum( (y_actual-y_predict)^2)/sum( (y_actual-mean(y_actual))^2)
+}
+
+MSE(train_data$RV, train_data$pred_HAR_RV)
+RSQUARE(train_data$RV, train_data$pred_HAR_RV)
