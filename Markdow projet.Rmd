@@ -1,0 +1,322 @@
+---
+title: "Predicting Realized Volatility using Machine Learning"
+output: html_document
+date: '04/22/2022'
+---
+MACHINE LEARNING 1108 - Group Project <br>
+Professor Alexandre Rubesam <br>
+Students: Marc KOCHMANSKI-CHMURA, Guillaume NAHUM, Antoine REFOUR, Lisi AI<br>
+Sunday, 22nd May 2022
+
+## Predicting Realized Volatility using Machine Learning
+
+We are helping our freshly integrated company on the development of a new trading strategy for equity indices which involves arbitraging between implied and realized volatility (RV). RV is a special type of non-parametric volatility estimator that uses high-frequency data. We worked on an improvement of this exciting model and tested different components to get the most optimized model configuration. In addition,  we tested linear models as well as machine learning models using different predictors.
+
+### 1. BSVP Presentation
+
+The São Paulo Stock Exchange is a stock and over-the-counter market based in Sao Paulo, Brazil. Founded in 1890 as Bolsa de Valores de São Paulo (BOVESPA), it is now part of B3 SA or Brasil, Bolsa, Balcão. B3 was formed following the 2008 merger of the exchange with the Brazilian Mercantile & Futures Exchange or Bolsa de Mercadorias e Futuros.
+The exchange is among the largest in the Americas with a market capitalization of $978 billion and 351 listed companies as of February 2021.1 The São Paulo Stock Exchange is one of the largest exchanges in the Americas. The BOVESPA Index, commonly known as the IBOVESPA, is the main performance indicator for this market. Its symbol is BVSP. Over-the-counter stocks and commodities also are traded on the exchange.
+
+##### Market capitalization: $978 billion
+##### Last value: 22,232.95 USD
+
+### 2. Start of computations Part
+
+```{r include=FALSE}
+library(data.table)      # easy to load large files
+library(xts)             # time series objects
+library(dplyr)           # illustrate dplyr and piping
+library(ggplot2)         # draw fancy graphics & Charts
+library(PerformanceAnalytics)
+```
+
+First of all, we are running in background the required Librairies. Now that we are ready we can start our journey ! <br> As our index has been assigned, we have to filter the correct data. These lines are Basically filtering our .csv file to keep only data related to BSVP index. We are keeping only few key historical statistics by creeating new variables holding the relavant data: date, RV, close price and open to close.
+```{r}
+rv_data <- fread("oxfordmanrealizedvolatilityindices.csv")
+
+rv_subset <- rv_data %>% 
+  filter(Symbol == ".BVSP") %>%
+  select(Date = V1, 
+         RV = rv5, 
+         close_price,
+         open_to_close)
+```
+
+We are converting the freshly created variables to get the correct values for the case study and furtheer computations.
+```{r}
+# format Date 
+rv_subset$Date <- as.Date(rv_subset$Date)
+
+rv_subset <- as.xts(rv_subset)
+rv_subset$RV <- rv_subset$RV^.5 * sqrt(252)
+rv_subset$rets <- CalculateReturns(rv_subset$close_price)
+```
+
+Generating charts to have a better representation of the RV, returns and intra-day returns
+```{r}
+par(mfrow = c(3, 1) )
+plot(rv_subset$rets)
+plot(rv_subset$open_to_close)
+plot(rv_subset$RV)
+```
+
+
+To estimate the HAR model, we need to calculate the moving averages.  MA is a calculation that takes the arithmetic mean of a given set of prices over the specific number of days in the past.The reason for calculating the moving average of a stock is to help smooth out the price data over a specified period of time by creating a constantly updated average price. This can be easily done using the frollmean function. To improve the HAR model we have tried additional windows and then We have lagged the moving averages using the lag function from the stats package.
+
+It seems interesting to compute several time configurations so we can see different approaches for each variables. We decided to design six time series : (1 day, 5 days, 1 month, 3 months, 6 months, 1 year).
+
+#### Realized Volatility Lagged Moving Averages Computation using several time series.
+
+```{r}
+# PART A
+
+## Moving Averages of RV
+rv_subset$MA_RV1 <- frollmean(rv_subset$RV, 1)
+rv_subset$MA_RV5 <- frollmean(rv_subset$RV, 5)
+rv_subset$MA_RV22 <- frollmean(rv_subset$RV, 22)
+rv_subset$MA_RV66 <- frollmean(rv_subset$RV, 66)
+rv_subset$MA_RV132 <- frollmean(rv_subset$RV, 132)
+rv_subset$MA_RV264 <- frollmean(rv_subset$RV, 264)
+
+### Lagged Moving Averages of RV 
+rv_subset$MA_RV1 <- stats::lag(rv_subset$MA_RV1, 1)
+rv_subset$MA_RV5 <- stats::lag(rv_subset$MA_RV5, 1)
+rv_subset$MA_RV22 <- stats::lag(rv_subset$MA_RV22, 1)
+rv_subset$MA_RV66 <- stats::lag(rv_subset$MA_RV66, 1)
+rv_subset$MA_RV132 <- stats::lag(rv_subset$MA_RV132, 1)
+rv_subset$MA_RV264 <- stats::lag(rv_subset$MA_RV264, 1)
+```
+
+
+#### Daily Returns Lagged Moving Averages Computation using several time series.
+
+```{r}
+# PART B
+
+## Moving Averages of DAILY RETURNS
+rv_subset$MA_Rets1 <- frollmean(rv_subset$rets, 1)
+rv_subset$MA_Rets5 <- frollmean(rv_subset$rets, 5)
+rv_subset$MA_Rets22 <- frollmean(rv_subset$rets, 22)
+rv_subset$MA_Rets66 <- frollmean(rv_subset$rets, 66)
+rv_subset$MA_Rets132 <- frollmean(rv_subset$rets, 132)
+rv_subset$MA_Rets264 <- frollmean(rv_subset$rets, 264)
+
+### Lagged Moving Averages of RV 
+rv_subset$MA_Rets1 <- stats::lag(rv_subset$MA_Rets1, 1)
+rv_subset$MA_Rets5 <- stats::lag(rv_subset$MA_Rets5, 1)
+rv_subset$MA_Rets22 <- stats::lag(rv_subset$MA_Rets22, 1)
+rv_subset$MA_Rets66 <- stats::lag(rv_subset$MA_Rets66, 1)
+rv_subset$MA_Rets132 <- stats::lag(rv_subset$MA_Rets132, 1)
+rv_subset$MA_Rets264 <- stats::lag(rv_subset$MA_Rets264, 1)
+```
+
+#### Intraday Returns Lagged Moving Averages Computation using several time series.
+```{r}
+# PART C 
+
+## Moving Averages of INTRADAY RETURNS
+rv_subset$MA_OtC1 <- frollmean(rv_subset$open_to_close, 1)
+rv_subset$MA_OtC5 <- frollmean(rv_subset$open_to_close, 5)
+rv_subset$MA_OtC22 <- frollmean(rv_subset$open_to_close, 22)
+rv_subset$MA_OtC66 <- frollmean(rv_subset$open_to_close, 66)
+rv_subset$MA_OtC132 <- frollmean(rv_subset$open_to_close, 132)
+rv_subset$MA_OtC264 <- frollmean(rv_subset$open_to_close, 264)
+
+# Lagged Moving Averages of INTRADAY RETURNS
+rv_subset$MA_OtC1 <- stats::lag(rv_subset$MA_OtC1, 1)
+rv_subset$MA_OtC5 <- stats::lag(rv_subset$MA_OtC5, 1)
+rv_subset$MA_OtC22 <- stats::lag(rv_subset$MA_OtC22, 1)
+rv_subset$MA_OtC66 <- stats::lag(rv_subset$MA_OtC66, 1)
+rv_subset$MA_OtC132 <- stats::lag(rv_subset$MA_OtC132, 1)
+rv_subset$MA_OtC264 <- stats::lag(rv_subset$MA_OtC264, 1)
+```
+
+We decided to draw three charts to have a better representation of the moving averages variables (RV, return, intra-days).
+These are Basically a testing sample so we can compaer them to further computations on longer time series. 
+```{r}
+# Lagged Moving Averages Plots (1 Day Time series)
+plot(rv_subset$MA_RV1,
+     col = "#646FD4",
+     main = "Lagged Moving Average of Realized Volatility (1 Day)",
+     xlab = "Date", ylab = "RV",
+     lwd = 1)
+plot(rv_subset$MA_Rets1, 
+     col = "#646FD4", 
+     main = "Lagged Moving Average of Daily returns (1 Day)",
+     xlab = "Date", ylab = "Daily returns",
+     lwd = 1)
+plot(rv_subset$MA_OtC1, 
+     col = "#646FD4", 
+     main = "Lagged Moving Average of Intraday Returns (1 Day)",
+     xlab = "Date", ylab = "Intraday Returns",
+     lwd = 1)
+```
+
+#### We then represented various Moving averages depending on time configuration on a single chart. 
+```{r}
+# Lagged Moving Averages Plots Realized Volatility
+plot(rv_subset$MA_RV66, 
+     col = "#646FD4", 
+     main = "Lagged Moving Average of Realized Volatility",
+     xlab = "Date", ylab = "RV",
+     lwd = 2)
+lines(rv_subset$MA_RV132, col = "#FF6FB5", lwd = 2)
+lines(rv_subset$MA_RV264, col = "#36AE7C", lwd = 2)
+```
+<br> In this case we kept RV (66, 132, 264). Without surprise the variations of the moving average the most distant is less important than the variation of the moving average 66 days or 132 days because the moving average 264 days takes more compossant to realize its average. It is therefore less impacted by short market variations, which makes it possible not to listen to market noises but to determine a long-term trend at the risk of not observing a rapid but major change.
+
+#### We made the same for Daily Returns... Three MA (66, 132, 264) on a single chart 
+```{r}
+# Lagged Moving Averages Plots Daily Returns
+plot(rv_subset$MA_Rets66, 
+     col = "#646FD4", 
+     main = "Lagged Moving Average of Daily Returns",
+     xlab = "Date", ylab = "Daily Returns",
+     lwd = 2)
+lines(rv_subset$MA_Rets132, col = "#FF6FB5", lwd = 2)
+lines(rv_subset$MA_Rets264, col = "#36AE7C", lwd = 2)
+```
+
+
+#### We made the same for Intraday Returns... Three MA (66, 132, 264) on a single chart 
+```{r}
+# Lagged Moving Averages Plots Intraday Returns
+plot(rv_subset$MA_OtC66, 
+     col = "#646FD4", 
+     main = "Lagged Moving Average of Intraday Returns",
+     xlab = "Date", ylab = "Intraday Returns",
+     lwd = 2,
+     type = "s")
+lines(rv_subset$MA_OtC132, col = "#FF6FB5", lwd = 2)
+lines(rv_subset$MA_OtC264, col = "#36AE7C", lwd = 2)
+
+```
+
+##### Now that we have seen the Moving Averages Part, we wanted to dig deeper into the volatility and the Returns. We decided to use several indicators such as Relative Strength Index and Bollinger Bands. We used (TTR) library which allows us to compute them quickly.
+
+```{r}
+#Additional indicators using (TTR) Library
+require(TTR)
+```
+Relative Strength Index (RSI) is a momentum indicator used in technical analysis that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset. 
+```{r}
+rsi <- RSI(rv_subset$close_price)
+#Ploting the RSI
+plot(rsi, type = "s")
+```
+
+<br>With the RSI, we can see that the index is frequently underbought (under 20 RSI), and has very high peaks above 80 which could be explained by speculation and uncertainty within the market.  
+
+#### Bollinger Bands are a way to compare a security's volatility and price levels over a period of time.
+```{r}
+BB <- BBands(rv_subset$close_price, n = 22, sd = 2)
+df <- data.frame(BB)
+```
+
+Long-term Bands are "collapsing" as they are smashed by the density of huge amounts of datas. Thus, Bollinger Bands do not give us additional information 
+We decided to not use them in our case study butt still tried to find study clues with this indicator.<br>
+#### After plotting the Bollinger Bands on historical BSVP Closing Prices, we obtain:
+```{r}
+plot(df$mavg, type = "s",lwd = 1)
+lines(df$dn, col = "#FF6FB5", lwd = 1) 
+lines(df$up, col = "#36AE7C", lwd = 1)
+```
+<br>
+#### Splitting the data into training and testing sets for further computations
+```{r}
+train_data <- rv_subset["/2019", ]
+test_data <-  rv_subset["2020/", ]
+
+# Cleaning training data
+train_data <- na.omit(train_data)
+```
+
+### 3. Developing our linear ML models
+
+##### Let's start using the basic HAR model
+
+```{r}
+HAR_RV <- lm(RV ~ MA_RV1 + MA_RV5 + MA_RV22,
+             data = train_data)
+summary(HAR_RV)
+```
+#### Let's use an enhanced HAR model with our new variables
+```{r}
+EN_HAR_RV <- lm(RV ~ MA_RV1 + MA_RV5 + MA_RV22 + MA_RV66 + MA_RV132 + MA_Rets1 + MA_Rets5 + MA_Rets22 + MA_OtC1 + MA_OtC5 + MA_OtC22,
+             data = train_data)
+summary(EN_HAR_RV)
+```
+#### Predicting RV in the training sample with simple HAR model
+```{r}
+
+train_data$pred_HAR_RV <- as.numeric(predict(HAR_RV))
+```
+#### Predicting RV in the training sample with enhanced HAR model we created 
+```{r}
+train_data$pred_EN_HAR_RV <- as.numeric(predict(EN_HAR_RV))
+```
+### RIDGE REGRESSION
+#### Let's start using "glmnet" library to go a little more in depth with our regression
+##### Side-note : might be useful to update native package 'Rcpp' for "glmnet" to work properly
+```{r}
+library(glmnet)
+```
+#### Let's find ridge penalty
+```{r}
+EN_HAR_RV_RIDGE <- glmnet(x=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')]),y = train_data$RV,alpha=0)
+summary(EN_HAR_RV_RIDGE)
+```
+#### We'll now run k-fold cross validation in order to find an optimal value for Lambda (penalty in ridge regression)
+```{r}
+cv_EN_HAR_RV_RIDGE <- cv.glmnet(x=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')]),y = train_data$RV,alpha=0)
+optimal_penalty <- cv_EN_HAR_RV_RIDGE$lambda.min
+```
+#### Let's visualize the mean squared error given lambda
+```{r}
+plot(cv_EN_HAR_RV_RIDGE)
+```
+<br>
+[Paragraph]
+<br>
+#### Now let's develop our optimal lasso regression model
+```{r}
+EN_HAR_RV_RIDGE <- glmnet(x=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')]),y = train_data$RV,alpha=0,lambda=optimal_penalty)
+coef(EN_HAR_RV_RIDGE)
+```
+#### Let's store our result in our train data table
+```{r}
+train_data$pred_EN_HAR_RV_RIDGE <- as.numeric(predict(EN_HAR_RV_RIDGE, s = optimal_penalty, newx=data.matrix(train_data[,c('MA_RV1','MA_RV5','MA_RV22','MA_RV66','MA_RV132','MA_Rets1','MA_Rets5','MA_Rets22','MA_OtC1','MA_OtC5','MA_OtC22')])))
+
+```
+#### Plotting our predictions and actual values in the mean time for year 2019
+```{r}
+plot(train_data["2019", 
+                c("RV", "pred_HAR_RV","pred_EN_HAR_RV","pred_EN_HAR_RV_RIDGE")], 
+     col=c("black", "red","blue","cyan"),
+     lwd = c(1,1), 
+     main = "Actual vs predicted RVs", 
+     legend.loc = "topleft")
+```
+
+### 4. Developing our non linear ML model
+
+#### Calculating and generating functions to get Mean Squared Error as well as R Squared
+
+We first create functions to calculate R2 and RMSE.
+```{r}
+MSE = function(y_actual, y_predict){
+  sqrt(mean((y_actual-y_predict)^2))
+}
+```
+Time to recall that R2 is given by 1 - SSR/SST !
+```{r}
+
+RSQUARE = function(y_actual,y_predict){
+  1 - sum( (y_actual-y_predict)^2)/sum( (y_actual-mean(y_actual))^2)
+}
+```
+
+```{r}
+MSE(train_data$RV, train_data$pred_HAR_RV)
+RSQUARE(train_data$RV, train_data$pred_HAR_RV)
+```
