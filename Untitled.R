@@ -121,18 +121,20 @@ require(TTR)
 
 # Relative Strength Index --->
 # The relative strength index (RSI) is a momentum indicator used in technical analysis that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset.
-rsi <- RSI(rv_data$close_price)
+rsi <- RSI(rv_subset$close_price)
 # -> plot(rsi, type = "s") #Ploting the RSI
 # With the RSI, we can see that the index is frequently underbought (under 20 RSI), and has very high peaks above 80 which could be explained by speculation and uncertainty within the market.  
 
 # Bollinger Bands --->
 # Bollinger Bands are a way to compare a security's volatility and price levels over a period of time. 
-BB <- BBands(rv_data$close_price, n = 22, sd = 2)
+BB <- BBands(rv_subset$close_price, n = 22, sd = 2)
 df <- data.frame(BB)
 
-#plot(df$mavg, type = "s",lwd = 1)
-#lines(df$dn, col = "#FF6FB5", lwd = 1) 
-#lines(df$up, col = "#36AE7C", lwd = 1)
+#Long-term Bands are "collapsing" as they are smashed by the density huge amounts of datas. Thus, Bollinger Bands do not give us additional information 
+#We decided to not use them in our case study.
+plot(df$mavg, type = "s",lwd = 1)
+lines(df$dn, col = "#FF6FB5", lwd = 1) 
+lines(df$up, col = "#36AE7C", lwd = 1)
 
                           #############################
 ###########################
