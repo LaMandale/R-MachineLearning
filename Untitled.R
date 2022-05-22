@@ -7,7 +7,7 @@ library(PerformanceAnalytics)
 rv_data <- fread("oxfordmanrealizedvolatilityindices.csv")
 
 rv_subset <- rv_data %>% 
-  filter(Symbol == ".SPX") %>%
+  filter(Symbol == ".BVSP") %>%
   select(Date = V1, 
          RV = rv5, 
          close_price,
@@ -121,7 +121,7 @@ require(TTR)
 
 # Relative Strength Index --->
 # The relative strength index (RSI) is a momentum indicator used in technical analysis that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset.
-rsi <- RSI(rv_subset$close_price)
+rsi <- RSI(rv_subset$Rets)
 # -> plot(rsi, type = "s") #Ploting the RSI
 # With the RSI, we can see that the index is frequently underbought (under 20 RSI), and has very high peaks above 80 which could be explained by speculation and uncertainty within the market.  
 
